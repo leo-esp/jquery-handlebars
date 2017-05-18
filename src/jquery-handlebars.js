@@ -7,7 +7,8 @@
 		templatePath: '',
 		templateExtension: 'handlebars',
 		partialPath: '',
-		partialExtension: 'partial'
+		partialExtension: 'partial',
+		sync: false,
 	};
 
 	var settings = $.extend({}, defaultSettings);
@@ -64,23 +65,49 @@
 			case 'helper':
 				Handlebars.registerHelper(arguments[1], arguments[2]);
 				break;
+			case 'add':
+				var tplname = arguments[1];
+				var tpldata = arguments[2];
+				console.log('h.add', tplname);
+				cache[ tplname ] = Handlebars.compile(tpldata);
+				break;
+			case 'has':
+				var tplname = arguments[1];
+				var res = !! cache.hasOwnProperty( tplname );
+				console.log('h.has', tplname, res);
+				return res;
+				break;
+			case 'cache':
+				return cache;
 			default:
 				throw 'invalid action specified to jQuery.handlebars: ' + arguments[0];
 			}
 		}
 	};
 
-	$.fn.render = function (templateName, data) {
-		var url = resolveTemplatePath(templateName);
-		if (cache.hasOwnProperty(url)) {
-			this.html(cache[url](data)).trigger('render.handlebars', [templateName, data]);
+	$.fn.render = function (templateName, data, callback) {
+		if (cache.hasOwnProperty( templateName )) {
+			this.html(cache[templateName](data)).trigger('render.handlebars', [templateName, data]);
+		} else if (settings.sync) {
+			console.warn({
+				msg: 'template not in cache',
+				tpl: templateName,
+				cache: cache,
+				settings: settings,
+			});
+			throw "jquery.handlerbars.sync: Template not in cache and sync = true: " + templateName;
 		} else {
+			var url = resolveTemplatePath(templateName);
 			var $this = this;
 			$.get(url, function (template) {
-				cache[url] = Handlebars.compile(template);
-				$this.html(cache[url](data)).trigger('render.handlebars', [templateName, data]);
+                $this.html('');
+				cache[templateName] = Handlebars.compile(template);
+				$this.html(cache[templateName](data)).trigger('render.handlebars', [templateName, data]);
+                if(typeof callback == 'function')
+                    callback();
 			}, 'text');
 		}
+
 		return this;
 	};
 }(jQuery));
